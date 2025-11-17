@@ -17,9 +17,9 @@ ENV NODE_ENV=production
 ENV PORT=7965
 ENV TZ=Asia/Shanghai
 
-RUN apk add --no-cache nginx sqlite curl dumb-init && \
-    addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001 && \
+RUN apk add --no-cache nginx sqlite curl dumb-init su-exec && \
+    addgroup -S nodejs && \
+    adduser -S nodejs && \
     rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
 
 WORKDIR /app
@@ -36,7 +36,6 @@ RUN mkdir -p /app/data /app/logs /var/log/nginx /var/lib/nginx/logs /run/nginx &
     chmod 644 /etc/nginx/nginx.conf && \
     chmod +x /app/start.sh
 
-USER nodejs
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost/health || exit 1
