@@ -17,29 +17,34 @@ ENV NODE_ENV=production
 ENV PORT=7965
 ENV TZ=Asia/Shanghai
 
-RUN apk add --no-cache nginx sqlite curl dumb-init && \
-    addgroup -g 1001 -S nodejs && \
-    adduser -S nodejs -u 1001 && \
+# Install runtime tools: nginx, sqlite, curl, dumb-init, plus bash and su-exec for start script and privilege drop
+RUN apk add --no-cache nginx sqlite curl dumb-init bash su-exec && \
+    addgroup -S nodejs && \
+    adduser -S -G nodejs nodejs && \
     rm -rf /var/cache/apk/* /tmp/* /var/tmp/*
 
 WORKDIR /app
 
+# Chown internal non-mounted directories to nodejs at build time
 COPY --chown=nodejs:nodejs backend/ ./backend/
 COPY --from=backend-deps --chown=nodejs:nodejs /app/node_modules ./backend/node_modules/
 COPY --from=frontend-builder --chown=nodejs:nodejs /app/frontend/dist ./frontend/
 COPY nginx.conf /etc/nginx/nginx.conf
-COPY docker-start.sh /app/start.sh
+
+# Keep original start.sh; add docker-start.sh as the runtime wrapper (do NOT overwrite start.sh)
+COPY docker-start.sh /app/docker-start.sh
+COPY start.sh /app/start.sh
 
 RUN mkdir -p /app/data /app/logs /var/log/nginx /var/lib/nginx/logs /run/nginx && \
     chown -R nodejs:nodejs /app /var/log/nginx /var/lib/nginx /etc/nginx /run/nginx && \
     chmod 755 /app/data /app/logs /var/log/nginx /var/lib/nginx /var/lib/nginx/logs /etc/nginx /run/nginx && \
     chmod 644 /etc/nginx/nginx.conf && \
-    chmod +x /app/start.sh
+    chmod +x /app/docker-start.sh /app/start.sh
 
-USER nodejs
+# Do not set USER here; runtime wrapper will drop privileges when appropriate
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
     CMD curl -f http://localhost/health || exit 1
 
-ENTRYPOINT ["dumb-init", "--"]
+ENTRYPOINT ["dumb-init", "--", "/app/docker-start.sh"]
 CMD ["/app/start.sh"]
